@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ATM Balance Sheet Auto Calculator</title>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        background: #f4f6f8;
+        margin: 0;
+        padding: 15px;
+    }
+
+    h2 {
+        text-align: center;
+        margin-bottom: 10px;
+    }
+
+    h3 {
+        margin-top: 0;
+    }
+
+    .controls {
+        text-align: center;
+        margin-bottom: 15px;
+    }
+
+    select, button {
+        padding: 8px;
+        font-size: 14px;
+        margin: 5px;
+    }
+
+    .table-wrapper {
+        overflow-x: auto;
+        margin-bottom: 25px;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        padding: 10px;
+    }
+
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 700px;
+    }
+
+    th, td {
+        border: 1px solid #ddd;
+        padding: 8px;
+        text-align: center;
+        font-size: 14px;
+    }
+
+    th {
+        background: #2c3e50;
+        color: #fff;
+    }
+
+    td.label {
+        font-weight: bold;
+        background: #f1f1f1;
+        text-align: left;
+        min-width: 220px;
+    }
+
+    input {
+        width: 80px;
+        padding: 5px;
+        text-align: center;
+    }
+
+    .total {
+        font-weight: bold;
+        background: #e8f5e9;
+    }
+</style>
+</head>
+
+<body>
+
+<h2>ATM Balance Sheet Auto Calculator</h2>
+
+<div class="controls">
+    <select id="denomSelect">
+        <option value="200">N$200</option>
+        <option value="100">N$100</option>
+        <option value="50">N$50</option>
+        <option value="30">N$30</option>
+        <option value="20">N$20</option>
+        <option value="10">N$10</option>
+    </select>
+    <button onclick="addDenomination()">➕ Add Denomination</button>
+    <button onclick="removeDenomination()">➖ Remove Denomination</button>
+</div>
+
+<!-- TABLE A -->
+<div class="table-wrapper">
+<h3 style="text-align:center">A – Cash Count / Balancing</h3>
+<table id="tableA">
+    <tr>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td class="label">Total notes in canister</td>
+    </tr>
+    <tr>
+        <td class="label">Total notes in reject bin</td>
+    </tr>
+    <tr>
+        <td class="label">Total notes</td>
+    </tr>
+    <tr>
+        <td class="label">N$ value of notes</td>
+    </tr>
+    <tr>
+        <td class="label total" colspan="1">Total N$ Value of notes</td>
+    </tr>
+</table>
+</div>
+
+<!-- TABLE B -->
+<div class="table-wrapper">
+<h3 style="text-align:center">B – Replenish</h3>
+<table id="tableB">
+    <tr>
+        <th>Description</th>
+    </tr>
+    <tr>
+        <td class="label">Total notes returned to canister</td>
+    </tr>
+    <tr>
+        <td class="label">Reimbursement from teller</td>
+    </tr>
+    <tr>
+        <td class="label">Total notes</td>
+    </tr>
+    <tr>
+        <td class="label">N$ value of notes</td>
+    </tr>
+    <tr>
+        <td class="label total" colspan="1">Total N$ Value of notes</td>
+    </tr>
+</table>
+</div>
+
+<script>
+let addedDenoms = [];
+
+// Format numbers with spaces (12 000)
+function formatNumber(num) {
+    return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+}
+
+function addDenomination() {
+    const denom = document.getElementById("denomSelect").value;
+    if (addedDenoms.includes(denom)) return;
+
+    addedDenoms.push(denom);
+
+    addColumn("tableA", denom, true);
+    addColumn("tableB", denom, false);
+    updateGrandTotals();
+}
+
+function removeDenomination() {
+    const denom = document.getElementById("denomSelect").value;
+    const index = addedDenoms.indexOf(denom);
+    if (index === -1) return;
+
+    addedDenoms.splice(index, 1);
+    removeColumn("tableA", index + 1);
+    removeColumn("tableB", index + 1);
+    updateGrandTotals();
+}
+
+function addColumn(tableId, denom, isTableA) {
+    const table = document.getElementById(tableId);
+    const rows = table.rows;
+
+    const th = document.createElement("th");
+    th.innerText = "N$" + denom;
+    rows[0].appendChild(th);
+
+    for (let i = 1; i < rows.length; i++) {
+        const td = document.createElement("td");
+
+        if (
+            (isTableA && (i === 1 || i === 2)) ||
+            (!isTableA && i === 2)
+        ) {
+            const input = document.createElement("input");
+            input.type = "number";
+            input.min = 0;
+            input.value = 0;
+            input.oninput = () => calculate(denom);
+            td.appendChild(input);
+        } else if (i === rows.length - 1) {
+            td.remove(); // no cells for total row
+            continue;
+        } else {
+            td.innerText = "0";
+            td.classList.add("total");
+        }
+
+        rows[i].appendChild(td);
+    }
+}
+
+function removeColumn(tableId, colIndex) {
+    const table = document.getElementById(tableId);
+    for (let row of table.rows) {
+        if (row.cells[colIndex]) row.deleteCell(colIndex);
+    }
+}
+
+function calculate(denom) {
+    const tableA = document.getElementById("tableA");
+    const tableB = document.getElementById("tableB");
+    const colIndex = addedDenoms.indexOf(denom) + 1;
+
+    const canister = +tableA.rows[1].cells[colIndex].firstChild.value || 0;
+    const reject = +tableA.rows[2].cells[colIndex].firstChild.value || 0;
+
+    const totalA = canister + reject;
+
+    tableA.rows[3].cells[colIndex].innerText = totalA;
+    tableA.rows[4].cells[colIndex].innerText = formatNumber(totalA * denom);
+
+    tableB.rows[1].cells[colIndex].innerText = totalA;
+
+    const reimbursement =
+        +tableB.rows[2].cells[colIndex].firstChild.value || 0;
+
+    const totalB = totalA + reimbursement;
+
+    tableB.rows[3].cells[colIndex].innerText = totalB;
+    tableB.rows[4].cells[colIndex].innerText = formatNumber(totalB * denom);
+
+    updateGrandTotals();
+}
+
+function updateGrandTotals() {
+    let sumA = 0;
+    let sumB = 0;
+
+    const tableA = document.getElementById("tableA");
+    const tableB = document.getElementById("tableB");
+
+    addedDenoms.forEach((d, i) => {
+        const col = i + 1;
+        sumA += parseInt(tableA.rows[4].cells[col]?.innerText.replace(/\s/g,'')) || 0;
+        sumB += parseInt(tableB.rows[4].cells[col]?.innerText.replace(/\s/g,'')) || 0;
+    });
+
+    tableA.rows[5].cells[0].innerText =
+        "Total N$ Value of notes = " + formatNumber(sumA);
+
+    tableB.rows[5].cells[0].innerText =
+        "Total N$ Value of notes = " + formatNumber(sumB);
+}
+</script>
+
+</body>
+</html>
